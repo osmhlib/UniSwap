@@ -8,11 +8,14 @@ namespace UniSwap.WebApi.Controllers
     public class ExchangeRequestsController : ControllerBase
     {
         private readonly SendExchangeRequest _sendExchangeRequest;
+        private readonly AcceptExchangeRequest _acceptExchangeRequest;
 
         public ExchangeRequestsController(
-            SendExchangeRequest sendExchangeRequest)
+            SendExchangeRequest sendExchangeRequest,
+            AcceptExchangeRequest acceptExchangeRequest)
         {
             _sendExchangeRequest = sendExchangeRequest;
+            _acceptExchangeRequest = acceptExchangeRequest;
         }
 
         [HttpPost]
@@ -24,6 +27,13 @@ namespace UniSwap.WebApi.Controllers
                 request.RequesterId);
 
             return Ok(new { Id = id });
+        }
+
+        [HttpPost("{id:guid}/accept")]
+        public async Task<IActionResult> Accept(Guid id)
+        {
+            await _acceptExchangeRequest.ExecuteAsync(id);
+            return NoContent();
         }
     }
 

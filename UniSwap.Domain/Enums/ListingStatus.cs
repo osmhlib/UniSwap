@@ -6,6 +6,7 @@ namespace UniSwap.Domain.Enums
 {
     public enum ListingStatus
     {
+        Draft,
         Available,
         Reserved,
         Exchanged,

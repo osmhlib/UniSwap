@@ -8,10 +8,12 @@ namespace UniSwap.WebApi.Controllers
     public class ListingsController : ControllerBase
     {
         private readonly CreateListing _createListing;
+        private readonly PublishListing _publishListing;
 
-        public ListingsController(CreateListing createListing)
+        public ListingsController(CreateListing createListing, PublishListing publishListing)
         {
             _createListing = createListing;
+            _publishListing = publishListing;
         }
 
         [HttpPost]
@@ -23,6 +25,13 @@ namespace UniSwap.WebApi.Controllers
                 request.Description);
 
             return Ok(new { Id = id });
+        }
+
+        [HttpPost("{id:guid}/publish")]
+        public async Task<IActionResult> Publish(Guid id)
+        {
+            await _publishListing.ExecuteAsync(id);
+            return NoContent();
         }
     }
 

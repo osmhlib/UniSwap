@@ -11,10 +11,17 @@ namespace UniSwap.Infrastructure.Repositories
     {
         private readonly List<ExchangeRequest> _requests = new();
 
+        public Task<ExchangeRequest?> GetByIdAsync(Guid id)
+        {
+            return Task.FromResult(_requests.FirstOrDefault(x => x.Id == id));
+        }
+
         public Task AddAsync(ExchangeRequest request)
         {
             _requests.Add(request);
             return Task.CompletedTask;
         }
+
+        public Task UpdateAsync(ExchangeRequest request) => Task.CompletedTask;
     }
 }

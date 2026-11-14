@@ -5,7 +5,7 @@ using UniSwap.Domain.Enums;
 
 namespace UniSwap.Domain.Entities
 {
-    public class Listing
+    public class Listing : AggregateRoot
     {
         public Guid Id { get; private set; }
         public Guid OwnerId { get; private set; }
@@ -19,15 +19,26 @@ namespace UniSwap.Domain.Entities
             OwnerId = ownerId;
             Title = title;
             Description = description;
-            Status = ListingStatus.Available;
+            Status = ListingStatus.Draft;
+            AddDomainEvent(new Events.ListingCreated(Id, OwnerId, Title, DateTime.UtcNow));
         }
 
-        public void Reserve()
+        public void Publish()
+        {
+            if (Status != ListingStatus.Draft)
+                throw new InvalidOperationException("Only draft listings can be published.");
+
+            Status = ListingStatus.Available;
+            AddDomainEvent(new Events.ListingPublished(Id, OwnerId, DateTime.UtcNow));
+        }
+
+        public void Reserve(Guid requesterId)
         {
             if (Status != ListingStatus.Available)
                 throw new InvalidOperationException("Listing is not available.");
 
             Status = ListingStatus.Reserved;
+            AddDomainEvent(new Events.ReservationConfirmed(Id, requesterId, DateTime.UtcNow));
         }
 
         public void MarkAsExchanged()

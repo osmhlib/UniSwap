@@ -5,7 +5,7 @@ using UniSwap.Domain.Enums;
 
 namespace UniSwap.Domain.Entities
 {
-    public class ExchangeRequest
+    public class ExchangeRequest : AggregateRoot
     {
         public Guid Id { get; private set; }
         public Guid ListingId { get; private set; }
@@ -26,6 +26,8 @@ namespace UniSwap.Domain.Entities
                 throw new InvalidOperationException("Only pending requests can be accepted.");
 
             Status = ExchangeStatus.Accepted;
+            AddDomainEvent(new Events.ExchangeRequestAccepted(
+                Id, ListingId, RequesterId, DateTime.UtcNow));
         }
 
         public void Reject()

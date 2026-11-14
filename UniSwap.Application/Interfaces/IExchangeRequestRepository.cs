@@ -7,6 +7,8 @@ namespace UniSwap.Application.Interfaces
 {
     public interface IExchangeRequestRepository
     {
+        Task<ExchangeRequest?> GetByIdAsync(Guid id);
         Task AddAsync(ExchangeRequest request);
+        Task UpdateAsync(ExchangeRequest request);
     }
 }

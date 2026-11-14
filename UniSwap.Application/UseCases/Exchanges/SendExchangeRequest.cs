@@ -4,6 +4,7 @@ using System.Text;
 using UniSwap.Application.Interfaces;
 using UniSwap.Domain.Entities;
 using UniSwap.Domain.Enums;
+using UniSwap.Application.Services;
 
 namespace UniSwap.Application.UseCases.Exchanges
 {
@@ -11,13 +12,16 @@ namespace UniSwap.Application.UseCases.Exchanges
     {
         private readonly IListingRepository _listingRepository;
         private readonly IExchangeRequestRepository _exchangeRequestRepository;
+        private readonly DomainEventPublisher _eventPublisher;
 
         public SendExchangeRequest(
             IListingRepository listingRepository,
-            IExchangeRequestRepository exchangeRequestRepository)
+            IExchangeRequestRepository exchangeRequestRepository,
+            DomainEventPublisher eventPublisher)
         {
             _listingRepository = listingRepository;
             _exchangeRequestRepository = exchangeRequestRepository;
+            _eventPublisher = eventPublisher;
         }
 
         public async Task<Guid> ExecuteAsync(
@@ -42,6 +46,7 @@ namespace UniSwap.Application.UseCases.Exchanges
                 requesterId);
 
             await _exchangeRequestRepository.AddAsync(request);
+            await _eventPublisher.PublishAsync(request);
 
             return request.Id;
         }
