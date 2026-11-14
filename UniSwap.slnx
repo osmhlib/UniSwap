@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="UniSwap.Application/UniSwap.Application.csproj" />
+  <Project Path="UniSwap.Domain/UniSwap.Domain.csproj" />
+  <Project Path="UniSwap.Infrastructure/UniSwap.Infrastructure.csproj" />
+  <Project Path="UniSwap.WebApi/UniSwap.WebApi.csproj" />
+</Solution>
