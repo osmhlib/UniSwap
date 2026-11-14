@@ -23,6 +23,17 @@ namespace UniSwap.Domain.Entities
             AddDomainEvent(new Events.ListingCreated(Id, OwnerId, Title, DateTime.UtcNow));
         }
 
+        private Listing(Listing source)
+        {
+            Id = source.Id;
+            OwnerId = source.OwnerId;
+            Title = source.Title;
+            Description = source.Description;
+            Status = source.Status;
+        }
+
+        public Listing Copy() => new(this);
+
         public void Publish()
         {
             if (Status != ListingStatus.Draft)

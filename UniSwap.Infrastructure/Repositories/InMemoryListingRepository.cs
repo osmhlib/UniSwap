@@ -1,30 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using UniSwap.Application.Interfaces;
 using UniSwap.Domain.Entities;
 
-namespace UniSwap.Infrastructure.Repositories
+namespace UniSwap.Infrastructure.Repositories;
+
+public sealed class InMemoryListingRepository(InMemoryStore store, InMemoryUnitOfWork unitOfWork) : IListingRepository
 {
-    public class InMemoryListingRepository : IListingRepository
+    public Task<Listing?> GetByIdAsync(Guid id)
     {
-        private readonly List<Listing> _listings = new();
+        if (unitOfWork.Listings.TryGetValue(id, out var pending))
+            return Task.FromResult<Listing?>(pending);
+        lock (store.SyncRoot)
+            return Task.FromResult(store.Listings.TryGetValue(id, out var listing) ? listing.Copy() : null);
+    }
 
-        public Task<Listing?> GetByIdAsync(Guid id)
-        {
-            var listing = _listings.FirstOrDefault(x => x.Id == id);
-            return Task.FromResult(listing);
-        }
+    public Task AddAsync(Listing listing)
+    {
+        unitOfWork.Listings.Add(listing.Id, listing);
+        return Task.CompletedTask;
+    }
 
-        public Task AddAsync(Listing listing)
-        {
-            _listings.Add(listing);
-            return Task.CompletedTask;
-        }
-
-        public Task UpdateAsync(Listing listing)
-        {
-            return Task.CompletedTask;
-        }
+    public Task UpdateAsync(Listing listing)
+    {
+        unitOfWork.Listings[listing.Id] = listing;
+        return Task.CompletedTask;
     }
 }

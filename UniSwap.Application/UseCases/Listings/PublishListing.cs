@@ -5,7 +5,8 @@ namespace UniSwap.Application.UseCases.Listings;
 
 public sealed class PublishListing(
     IListingRepository listingRepository,
-    DomainEventPublisher eventPublisher)
+    IDomainEventPublisher eventPublisher,
+    IUnitOfWork unitOfWork)
 {
     public async Task ExecuteAsync(Guid listingId)
     {
@@ -14,6 +15,7 @@ public sealed class PublishListing(
 
         listing.Publish();
         await listingRepository.UpdateAsync(listing);
+        await unitOfWork.SaveChangesAsync();
         await eventPublisher.PublishAsync(listing);
     }
 }

@@ -1,27 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using UniSwap.Application.Interfaces;
 using UniSwap.Domain.Entities;
 
-namespace UniSwap.Infrastructure.Repositories
+namespace UniSwap.Infrastructure.Repositories;
+
+public sealed class InMemoryExchangeRequestRepository(InMemoryStore store, InMemoryUnitOfWork unitOfWork) : IExchangeRequestRepository
 {
-    public class InMemoryExchangeRequestRepository
-    : IExchangeRequestRepository
+    public Task<ExchangeRequest?> GetByIdAsync(Guid id)
     {
-        private readonly List<ExchangeRequest> _requests = new();
+        if (unitOfWork.ExchangeRequests.TryGetValue(id, out var pending))
+            return Task.FromResult<ExchangeRequest?>(pending);
+        lock (store.SyncRoot)
+            return Task.FromResult(store.ExchangeRequests.TryGetValue(id, out var request) ? request.Copy() : null);
+    }
 
-        public Task<ExchangeRequest?> GetByIdAsync(Guid id)
-        {
-            return Task.FromResult(_requests.FirstOrDefault(x => x.Id == id));
-        }
+    public Task AddAsync(ExchangeRequest request)
+    {
+        unitOfWork.ExchangeRequests.Add(request.Id, request);
+        return Task.CompletedTask;
+    }
 
-        public Task AddAsync(ExchangeRequest request)
-        {
-            _requests.Add(request);
-            return Task.CompletedTask;
-        }
-
-        public Task UpdateAsync(ExchangeRequest request) => Task.CompletedTask;
+    public Task UpdateAsync(ExchangeRequest request)
+    {
+        unitOfWork.ExchangeRequests[request.Id] = request;
+        return Task.CompletedTask;
     }
 }

@@ -7,7 +7,8 @@ namespace UniSwap.Application.UseCases.Exchanges;
 public sealed class AcceptExchangeRequest(
     IListingRepository listingRepository,
     IExchangeRequestRepository exchangeRequestRepository,
-    DomainEventPublisher eventPublisher)
+    IDomainEventPublisher eventPublisher,
+    IUnitOfWork unitOfWork)
 {
     public async Task ExecuteAsync(Guid exchangeRequestId)
     {
@@ -26,6 +27,7 @@ public sealed class AcceptExchangeRequest(
 
         await exchangeRequestRepository.UpdateAsync(request);
         await listingRepository.UpdateAsync(listing);
+        await unitOfWork.SaveChangesAsync();
         await eventPublisher.PublishAsync([request, listing]);
     }
 }

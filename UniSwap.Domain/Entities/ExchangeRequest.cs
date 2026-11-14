@@ -20,6 +20,16 @@ namespace UniSwap.Domain.Entities
             Status = ExchangeStatus.Pending;
         }
 
+        private ExchangeRequest(ExchangeRequest source)
+        {
+            Id = source.Id;
+            ListingId = source.ListingId;
+            RequesterId = source.RequesterId;
+            Status = source.Status;
+        }
+
+        public ExchangeRequest Copy() => new(this);
+
         public void Accept()
         {
             if (Status != ExchangeStatus.Pending)

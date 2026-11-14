@@ -10,12 +10,14 @@ namespace UniSwap.Application.UseCases.Listings
     public class CreateListing
     {
         private readonly IListingRepository _listingRepository;
-        private readonly DomainEventPublisher _eventPublisher;
+        private readonly IDomainEventPublisher _eventPublisher;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public CreateListing(IListingRepository listingRepository, DomainEventPublisher eventPublisher)
+        public CreateListing(IListingRepository listingRepository, IDomainEventPublisher eventPublisher, IUnitOfWork unitOfWork)
         {
             _listingRepository = listingRepository;
             _eventPublisher = eventPublisher;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<Guid> ExecuteAsync(
@@ -26,6 +28,7 @@ namespace UniSwap.Application.UseCases.Listings
             var listing = new Listing(ownerId, title, description);
 
             await _listingRepository.AddAsync(listing);
+            await _unitOfWork.SaveChangesAsync();
             await _eventPublisher.PublishAsync(listing);
 
             return listing.Id;

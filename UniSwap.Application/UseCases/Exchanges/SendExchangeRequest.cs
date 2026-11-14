@@ -12,16 +12,19 @@ namespace UniSwap.Application.UseCases.Exchanges
     {
         private readonly IListingRepository _listingRepository;
         private readonly IExchangeRequestRepository _exchangeRequestRepository;
-        private readonly DomainEventPublisher _eventPublisher;
+        private readonly IDomainEventPublisher _eventPublisher;
+        private readonly IUnitOfWork _unitOfWork;
 
         public SendExchangeRequest(
             IListingRepository listingRepository,
             IExchangeRequestRepository exchangeRequestRepository,
-            DomainEventPublisher eventPublisher)
+            IDomainEventPublisher eventPublisher,
+            IUnitOfWork unitOfWork)
         {
             _listingRepository = listingRepository;
             _exchangeRequestRepository = exchangeRequestRepository;
             _eventPublisher = eventPublisher;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<Guid> ExecuteAsync(
@@ -46,6 +49,7 @@ namespace UniSwap.Application.UseCases.Exchanges
                 requesterId);
 
             await _exchangeRequestRepository.AddAsync(request);
+            await _unitOfWork.SaveChangesAsync();
             await _eventPublisher.PublishAsync(request);
 
             return request.Id;

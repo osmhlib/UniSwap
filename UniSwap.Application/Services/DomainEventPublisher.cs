@@ -3,7 +3,7 @@ using UniSwap.Domain.Events;
 
 namespace UniSwap.Application.Services;
 
-public sealed class DomainEventPublisher(IDomainEventDispatcher dispatcher)
+public sealed class DomainEventPublisher(IDomainEventDispatcher dispatcher) : IDomainEventPublisher
 {
     public async Task PublishAsync(IHasDomainEvents aggregate, CancellationToken cancellationToken = default)
     {
