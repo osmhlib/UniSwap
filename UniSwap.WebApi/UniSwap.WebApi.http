@@ -1,6 +1,34 @@
-@UniSwap.WebApi_HostAddress = http://localhost:5232
+@host = https://localhost:7258
+@listingId = 00000000-0000-0000-0000-000000000000
+@accessToken = paste-token-from-login
 
-GET {{UniSwap.WebApi_HostAddress}}/weatherforecast/
+GET {{host}}/openapi/v1.json
 Accept: application/json
 
 ###
+
+GET {{host}}/api/listings?category=Books&available=true&page=1&pageSize=20
+Accept: application/json
+
+###
+
+GET {{host}}/api/users/me
+Authorization: Bearer {{accessToken}}
+
+###
+
+POST {{host}}/api/listings
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "title": "Algorithms textbook",
+  "description": "A used copy in good condition.",
+  "category": "Books",
+  "condition": "Used"
+}
+
+###
+
+POST {{host}}/api/listings/{{listingId}}/publish
+Authorization: Bearer {{accessToken}}

@@ -14,7 +14,10 @@ public class Listing : AggregateRoot
     public ListingStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? PublishedAtUtc { get; private set; }
+    public DateTime? DeletedAtUtc { get; private set; }
     public string? ModerationReason { get; private set; }
+
+    private Listing() { Title = Description = Category = Condition = null!; }
 
     public Listing(Guid ownerId, string title, string description, string category, string condition)
     {
@@ -30,7 +33,7 @@ public class Listing : AggregateRoot
     {
         Id = source.Id; OwnerId = source.OwnerId; Title = source.Title; Description = source.Description;
         Category = source.Category; Condition = source.Condition; Status = source.Status;
-        CreatedAtUtc = source.CreatedAtUtc; PublishedAtUtc = source.PublishedAtUtc; ModerationReason = source.ModerationReason;
+        CreatedAtUtc = source.CreatedAtUtc; PublishedAtUtc = source.PublishedAtUtc; ModerationReason = source.ModerationReason; DeletedAtUtc = source.DeletedAtUtc;
     }
 
     public Listing Copy() => new(this);
@@ -44,13 +47,19 @@ public class Listing : AggregateRoot
 
     public void EnsureEditable()
     {
-        if (Status is ListingStatus.Reserved or ListingStatus.InExchange or ListingStatus.Completed)
-            throw new InvalidOperationException("This listing cannot be edited or deleted in its current status.");
+        if (DeletedAtUtc.HasValue || Status is ListingStatus.Reserved or ListingStatus.InExchange or ListingStatus.Completed)
+            throw new InvalidTransitionException("This listing cannot be edited or deleted in its current status.");
+    }
+
+    public void Delete()
+    {
+        EnsureEditable();
+        DeletedAtUtc = DateTime.UtcNow;
     }
 
     public void Publish()
     {
-        if (Status != ListingStatus.Draft) throw new InvalidOperationException("Only draft listings can be published.");
+        if (DeletedAtUtc.HasValue || Status != ListingStatus.Draft) throw new InvalidTransitionException("Only draft listings can be published.");
         Status = ListingStatus.Published; PublishedAtUtc = DateTime.UtcNow; ModerationReason = null;
         AddDomainEvent(new ListingPublished(Id, OwnerId, PublishedAtUtc.Value));
     }
@@ -58,38 +67,54 @@ public class Listing : AggregateRoot
     public void Reserve(Guid requesterId)
     {
         if (requesterId == Guid.Empty || requesterId == OwnerId) throw new ArgumentException("A different requester is required.", nameof(requesterId));
-        if (Status != ListingStatus.Published) throw new InvalidOperationException("Only published listings can be reserved.");
+        if (Status != ListingStatus.Published) throw new InvalidTransitionException("Only published listings can be reserved.");
         Status = ListingStatus.Reserved;
         AddDomainEvent(new ReservationConfirmed(Id, requesterId, DateTime.UtcNow));
     }
 
     public void StartExchange()
     {
-        if (Status != ListingStatus.Published) throw new InvalidOperationException("Only published listings can enter an exchange.");
+        if (Status != ListingStatus.Published) throw new InvalidTransitionException("Only published listings can enter an exchange.");
         Status = ListingStatus.InExchange;
     }
 
     public void Complete()
     {
-        if (Status != ListingStatus.InExchange) throw new InvalidOperationException("Only listings in an exchange can be completed.");
+        if (Status != ListingStatus.InExchange) throw new InvalidTransitionException("Only listings in an exchange can be completed.");
         Status = ListingStatus.Completed;
     }
 
     public void Hide(string reason) => Moderate(ListingStatus.Hidden, reason);
     public void Reject(string reason) => Moderate(ListingStatus.Rejected, reason);
 
+    public void RemoveByModerator(string reason)
+    {
+        if (Status is not (ListingStatus.Published or ListingStatus.Hidden or ListingStatus.Rejected))
+            throw new InvalidTransitionException("This listing cannot be removed through moderation.");
+        var normalizedReason = ValidateModerationReason(reason);
+        Delete();
+        ModerationReason = normalizedReason;
+    }
+
     public void ReturnToDraft()
     {
         if (Status is not (ListingStatus.Hidden or ListingStatus.Rejected))
-            throw new InvalidOperationException("Only hidden or rejected listings can be returned to draft.");
+            throw new InvalidTransitionException("Only hidden or rejected listings can be returned to draft.");
         Status = ListingStatus.Draft; ModerationReason = null;
     }
 
     private void Moderate(ListingStatus target, string reason)
     {
-        if (Status != ListingStatus.Published) throw new InvalidOperationException("Only published listings can be moderated.");
-        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A moderation reason is required.", nameof(reason));
-        Status = target; ModerationReason = reason.Trim();
+        if (Status != ListingStatus.Published) throw new InvalidTransitionException("Only published listings can be moderated.");
+        ModerationReason = ValidateModerationReason(reason);
+        Status = target;
+    }
+
+    private static string ValidateModerationReason(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 2000)
+            throw new ArgumentException("A moderation reason of up to 2000 characters is required.", nameof(reason));
+        return reason.Trim();
     }
 
     private static void Validate(string title, string description, string category, string condition)

@@ -17,6 +17,10 @@ using Microsoft.AspNetCore.Routing;
 using UniSwap.WebApi.Dtos;
 using UniSwap.WebApi.Validation;
 using UniSwap.Infrastructure.Caching;
+using UniSwap.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 var services = new ServiceCollection();
 services.AddSingleton<InMemoryStore>();
@@ -49,7 +53,7 @@ var getListing = sp.GetRequiredService<GetListing>();
 if (await getListing.ExecuteAsync(listingId) is not null || await getListing.ExecuteAsync(Guid.NewGuid()) is not null)
     throw new InvalidOperationException("Draft or missing listing was exposed.");
 var offeredListingId = await sp.GetRequiredService<CreateListing>().ExecuteAsync(exchangeRequester, "Other book", "Description", "Books", "Used");
-await sp.GetRequiredService<PublishListing>().ExecuteAsync(listingId);
+await sp.GetRequiredService<PublishListing>().ExecuteAsync(listingId, exchangeOwner);
 var listingDto = await getListing.ExecuteAsync(listingId);
 if (listingDto is null || listingDto.Id != listingId || listingDto.OwnerId != exchangeOwner ||
     listingDto.Title != "Book" || listingDto.Description != "Description" || listingDto.Category != "Books" ||
@@ -61,10 +65,10 @@ if ((await offlineReader.ExecuteAsync(listingId))?.Id != listingId)
 var testCache = (TestListingCache)sp.GetRequiredService<IListingCache>();
 if (testCache.Values.Count != 1 || await getListing.ExecuteAsync(listingId) != listingDto)
     throw new InvalidOperationException("Listing cache did not serve the cached DTO.");
-await sp.GetRequiredService<PublishListing>().ExecuteAsync(offeredListingId);
+await sp.GetRequiredService<PublishListing>().ExecuteAsync(offeredListingId, exchangeRequester);
 var requestId = await sp.GetRequiredService<SendExchangeRequest>().ExecuteAsync(listingId, offeredListingId, exchangeRequester);
 await sp.GetRequiredService<AcceptExchangeRequest>().ExecuteAsync(requestId, exchangeOwner);
-if (testCache.Values.ContainsKey(listingId) || await getListing.ExecuteAsync(listingId) is not null)
+if (testCache.Values.ContainsKey(listingId) || (await getListing.ExecuteAsync(listingId))?.Status != "InExchange")
     throw new InvalidOperationException("Exchange did not invalidate the listing cache.");
 
 var listing = await sp.GetRequiredService<IListingRepository>().GetByIdAsync(listingId);
@@ -77,6 +81,18 @@ if (listing?.Status != ListingStatus.InExchange || request?.Status != ExchangeSt
     throw new InvalidOperationException("Exchange workflow or audit events failed.");
 
 Console.WriteLine("Exchange workflow and audit handlers passed.");
+
+var hiddenListingId = await sp.GetRequiredService<CreateListing>()
+    .ExecuteAsync(exchangeOwner, "Cache visibility", "Description", "Books", "Used");
+await sp.GetRequiredService<PublishListing>().ExecuteAsync(hiddenListingId, exchangeOwner);
+await getListing.ExecuteAsync(hiddenListingId);
+var hiddenListing = (await sp.GetRequiredService<IListingRepository>().GetByIdAsync(hiddenListingId))!;
+hiddenListing.Hide("A moderation decision");
+await sp.GetRequiredService<IListingRepository>().UpdateAsync(hiddenListing);
+await sp.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+if (!testCache.Values.ContainsKey(hiddenListingId) || await getListing.ExecuteAsync(hiddenListingId) is not null)
+    throw new InvalidOperationException("A stale cache entry exposed a hidden listing.");
+Console.WriteLine("Stale listing cache cannot bypass publication status.");
 
 var uncommitted = new Listing(Guid.NewGuid(), "Uncommitted", "Test", "Books", "Used");
 using (var pendingScope = provider.CreateScope())
@@ -175,19 +191,45 @@ async Task<(ActionExecutingContext Context, bool Executed)> CheckFilter(object r
     });
     return (context, executed);
 }
-var invalid = await CheckFilter(new CreateListingRequest(Guid.Empty, " x ", " ", "", ""));
+var invalid = await CheckFilter(new CreateListingRequest(" x ", " ", "", ""));
 if (invalid.Executed || invalid.Context.Result is not BadRequestObjectResult { Value: ValidationProblemDetails problem } ||
-    !problem.Errors.ContainsKey("OwnerId") || !problem.Errors.ContainsKey("Title") || !problem.Errors.ContainsKey("Description"))
+    !problem.Errors.ContainsKey("Title") || !problem.Errors.ContainsKey("Description"))
     throw new InvalidOperationException("Validation filter did not return structured errors.");
-var valid = await CheckFilter(new CreateListingRequest(Guid.NewGuid(), "Book", "Description", "Books", "Used"));
+var valid = await CheckFilter(new CreateListingRequest("Book", "Description", "Books", "Used"));
 if (!valid.Executed || valid.Context.Result is not null)
     throw new InvalidOperationException("Valid request did not pass the filter.");
 var sameId = Guid.NewGuid();
-var semantic = await CheckFilter(new SendExchangeRequestDto(sameId, sameId, Guid.NewGuid()));
+var semantic = await CheckFilter(new SendExchangeRequestDto(sameId, sameId));
 if (semantic.Executed || semantic.Context.Result is not BadRequestObjectResult { Value: ValidationProblemDetails semanticProblem } ||
     !semanticProblem.Errors.ContainsKey("OfferedListingId"))
     throw new InvalidOperationException("Semantic validation failed.");
 Console.WriteLine("Validation filter, structured errors and semantic rule passed.");
+
+// Validate relational mappings and migration generation without requiring a running database.
+var options = new DbContextOptionsBuilder<UniSwapDbContext>()
+    .UseNpgsql("Host=localhost;Database=unisw ap")
+    .Options;
+await using (var db = new UniSwapDbContext(options))
+{
+    foreach (var type in new[] { typeof(User), typeof(Listing), typeof(ListingImage), typeof(Reservation), typeof(ExchangeRequest) })
+        if (db.Model.FindEntityType(type) is null) throw new InvalidOperationException($"Missing mapping: {type.Name}.");
+    foreach (var type in new[] { typeof(Listing), typeof(Reservation), typeof(ExchangeRequest) })
+    {
+        var version = db.Model.FindEntityType(type)!.FindProperty("Version");
+        if (version is null || !version.IsConcurrencyToken) throw new InvalidOperationException($"Missing concurrency token: {type.Name}.");
+    }
+    var migrationSql = db.GetService<IMigrator>().GenerateScript();
+    if (!migrationSql.Contains("CREATE TABLE \"ListingImages\"") || !migrationSql.Contains("CREATE TABLE \"Reservations\""))
+        throw new InvalidOperationException("Migration SQL is missing expected tables.");
+}
+Expect<ArgumentException>(() => new ListingImage(Guid.NewGuid(), "key", "image/gif", 100));
+Expect<ArgumentOutOfRangeException>(() => new ListingImage(Guid.NewGuid(), "key", "image/png", 5 * 1024 * 1024 + 1));
+Console.WriteLine("PostgreSQL model, migration SQL and image metadata validation passed.");
+
+await ImageStorageSmokeTests.RunAsync();
+
+if (Environment.GetEnvironmentVariable("UniSwapTests__Postgres") is { Length: > 0 } testDatabase)
+    await PostgresSmokeTests.RunAsync(testDatabase);
 
 static void Expect<TException>(Action action) where TException : Exception
 {

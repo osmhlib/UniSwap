@@ -1,3 +1,4 @@
+using UniSwap.Domain.Enums;
 using UniSwap.Application.Interfaces;
 using UniSwap.Domain.Entities;
 
@@ -13,11 +14,19 @@ public sealed class InMemoryListingRepository(InMemoryStore store, InMemoryUnitO
             return Task.FromResult(store.Listings.TryGetValue(id, out var listing) ? listing.Copy() : null);
     }
 
+    public async Task<ListingStatus?> GetStatusAsync(Guid id)
+    {
+        var listing = await GetByIdAsync(id);
+        return listing is { DeletedAtUtc: null } ? listing.Status : null;
+    }
+
     public Task AddAsync(Listing listing)
     {
         unitOfWork.Listings.Add(listing.Id, listing);
         return Task.CompletedTask;
     }
+
+    public Task RequireUnchangedAsync(Listing listing) => UpdateAsync(listing);
 
     public Task UpdateAsync(Listing listing)
     {

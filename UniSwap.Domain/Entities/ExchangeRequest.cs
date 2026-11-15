@@ -14,6 +14,8 @@ public class ExchangeRequest : AggregateRoot
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
+    private ExchangeRequest() { }
+
     public ExchangeRequest(Listing listing, Listing offeredListing, Guid requesterId)
     {
         ArgumentNullException.ThrowIfNull(listing);
@@ -21,7 +23,7 @@ public class ExchangeRequest : AggregateRoot
         if (requesterId == Guid.Empty || requesterId == listing.OwnerId || offeredListing.OwnerId != requesterId || listing.Id == offeredListing.Id)
             throw new ArgumentException("The offered listing must belong to the requester and the target to another user.");
         if (listing.Status != ListingStatus.Published || offeredListing.Status != ListingStatus.Published)
-            throw new InvalidOperationException("Both listings must be published.");
+            throw new InvalidTransitionException("Both listings must be published.");
         Id = Guid.NewGuid(); ListingId = listing.Id; OfferedListingId = offeredListing.Id;
         RequesterId = requesterId; RecipientId = listing.OwnerId;
         Status = ExchangeStatus.Pending; CreatedAtUtc = UpdatedAtUtc = DateTime.UtcNow;
@@ -61,7 +63,7 @@ public class ExchangeRequest : AggregateRoot
 
     public void Complete(Guid actorId, Listing listing, Listing offeredListing)
     {
-        if (Status != ExchangeStatus.Accepted) throw new InvalidOperationException("Only accepted offers can be completed.");
+        if (Status != ExchangeStatus.Accepted) throw new InvalidTransitionException("Only accepted offers can be completed.");
         if (actorId != RequesterId && actorId != RecipientId) throw new UnauthorizedAccessException("Only participants can complete an exchange.");
         ValidateListings(listing, offeredListing, ListingStatus.InExchange);
         listing.Complete(); offeredListing.Complete();
@@ -70,7 +72,7 @@ public class ExchangeRequest : AggregateRoot
 
     private void RequirePending()
     {
-        if (Status != ExchangeStatus.Pending) throw new InvalidOperationException("Only pending offers can be changed.");
+        if (Status != ExchangeStatus.Pending) throw new InvalidTransitionException("Only pending offers can be changed.");
     }
 
     private void ValidateListings(Listing listing, Listing offeredListing, ListingStatus status)
@@ -78,6 +80,6 @@ public class ExchangeRequest : AggregateRoot
         ArgumentNullException.ThrowIfNull(listing);
         ArgumentNullException.ThrowIfNull(offeredListing);
         if (listing.Id != ListingId || offeredListing.Id != OfferedListingId) throw new ArgumentException("Listings do not match the offer.");
-        if (listing.Status != status || offeredListing.Status != status) throw new InvalidOperationException("Both listings must be in the expected status.");
+        if (listing.Status != status || offeredListing.Status != status) throw new InvalidTransitionException("Both listings must be in the expected status.");
     }
 }

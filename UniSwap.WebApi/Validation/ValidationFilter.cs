@@ -21,7 +21,10 @@ public sealed class ValidationFilter(IServiceProvider services) : IAsyncActionFi
 
         if (!context.ModelState.IsValid)
         {
-            context.Result = new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+            context.Result = new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState)
+            {
+                Extensions = { ["code"] = "validation_failed" }
+            });
             return;
         }
 

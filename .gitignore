@@ -361,3 +361,22 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local uploaded listing images
+App_Data/
+
+# Local environment variables and developer-specific configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+appsettings.Local.json
+appsettings.*.Local.json
+
+# Local credentials and database exports
+.pgpass
+pgpass.conf
+*.pem
+*.key
+*.dump
+*.backup

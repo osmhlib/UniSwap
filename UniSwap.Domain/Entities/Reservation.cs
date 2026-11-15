@@ -12,11 +12,13 @@ public sealed class Reservation : AggregateRoot
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
+    private Reservation() { }
+
     public Reservation(Listing listing, Guid requesterId)
     {
         ArgumentNullException.ThrowIfNull(listing);
         if (requesterId == Guid.Empty || requesterId == listing.OwnerId) throw new ArgumentException("A different requester is required.", nameof(requesterId));
-        if (listing.Status != ListingStatus.Published) throw new InvalidOperationException("Only published listings can be reserved.");
+        if (listing.Status != ListingStatus.Published) throw new InvalidTransitionException("Only published listings can be reserved.");
         Id = Guid.NewGuid(); ListingId = listing.Id; RequesterId = requesterId; OwnerId = listing.OwnerId;
         CreatedAtUtc = UpdatedAtUtc = DateTime.UtcNow; Status = ReservationStatus.Pending;
     }
@@ -46,6 +48,6 @@ public sealed class Reservation : AggregateRoot
 
     private void RequirePending()
     {
-        if (Status != ReservationStatus.Pending) throw new InvalidOperationException("Only pending reservations can be changed.");
+        if (Status != ReservationStatus.Pending) throw new InvalidTransitionException("Only pending reservations can be changed.");
     }
 }

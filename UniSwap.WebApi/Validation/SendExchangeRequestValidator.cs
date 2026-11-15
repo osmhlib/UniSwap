@@ -10,6 +10,5 @@ public sealed class SendExchangeRequestValidator : AbstractValidator<SendExchang
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.OfferedListingId).NotEmpty().NotEqual(x => x.ListingId)
             .WithMessage("The offered listing must differ from the requested listing.");
-        RuleFor(x => x.RequesterId).NotEmpty();
     }
 }

@@ -9,14 +9,18 @@ public sealed class GetListing(IListingRepository listings, IListingCache cache)
     public async Task<ListingDto?> ExecuteAsync(Guid id)
     {
         var cached = await cache.GetAsync(id);
-        if (cached is not null) return cached;
+        // Cache invalidation is best effort. The database decides if a cached listing is still public.
+        if (cached is { Status: nameof(ListingStatus.Published) } &&
+            await listings.GetStatusAsync(id) == ListingStatus.Published)
+            return cached;
+
+
         var listing = await listings.GetByIdAsync(id);
-        if (listing is null || listing.Status != ListingStatus.Published)
+        if (listing is null || listing.Status is not (ListingStatus.Published or ListingStatus.Reserved or ListingStatus.InExchange) || listing.DeletedAtUtc.HasValue)
             return null;
 
-        var dto = new ListingDto(listing.Id, listing.OwnerId, listing.Title, listing.Description,
-            listing.Category, listing.Condition, listing.Status.ToString(), listing.CreatedAtUtc, listing.PublishedAtUtc);
-        await cache.SetAsync(id, dto);
+        var dto = ListingDto.From(listing);
+        if (listing.Status == ListingStatus.Published) await cache.SetAsync(id, dto);
         return dto;
     }
 }

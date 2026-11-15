@@ -1,3 +1,4 @@
+using UniSwap.Application.Common;
 using UniSwap.Application.Interfaces;
 using UniSwap.Application.Services;
 
@@ -9,10 +10,12 @@ public sealed class PublishListing(
     IUnitOfWork unitOfWork,
     IListingCache cache)
 {
-    public async Task ExecuteAsync(Guid listingId)
+    public async Task ExecuteAsync(Guid listingId, Guid actorId)
     {
         var listing = await listingRepository.GetByIdAsync(listingId)
-            ?? throw new InvalidOperationException("Listing not found.");
+            ?? throw new ResourceNotFoundException();
+
+        if (listing.OwnerId != actorId) throw new UnauthorizedAccessException();
 
         listing.Publish();
         await listingRepository.UpdateAsync(listing);
