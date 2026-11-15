@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using UniSwap.Application.UseCases.Exchanges;
+using UniSwap.WebApi.Dtos;
 
 namespace UniSwap.WebApi.Controllers
 {
@@ -27,7 +28,7 @@ namespace UniSwap.WebApi.Controllers
                 request.OfferedListingId,
                 request.RequesterId);
 
-            return Ok(new { Id = id });
+            return Ok(new CreatedResponse(id));
         }
 
         [HttpPost("{id:guid}/accept")]
@@ -38,10 +39,4 @@ namespace UniSwap.WebApi.Controllers
         }
     }
 
-    public record SendExchangeRequestDto(
-        Guid ListingId,
-        Guid OfferedListingId,
-        Guid RequesterId);
-
-    public record AcceptExchangeRequestDto(Guid ActorId);
 }

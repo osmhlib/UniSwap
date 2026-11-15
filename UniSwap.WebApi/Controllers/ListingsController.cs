@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using UniSwap.Application.UseCases.Listings;
+using UniSwap.Application.Dtos;
+using UniSwap.WebApi.Dtos;
 
 namespace UniSwap.WebApi.Controllers
 {
@@ -9,11 +11,13 @@ namespace UniSwap.WebApi.Controllers
     {
         private readonly CreateListing _createListing;
         private readonly PublishListing _publishListing;
+        private readonly GetListing _getListing;
 
-        public ListingsController(CreateListing createListing, PublishListing publishListing)
+        public ListingsController(CreateListing createListing, PublishListing publishListing, GetListing getListing)
         {
             _createListing = createListing;
             _publishListing = publishListing;
+            _getListing = getListing;
         }
 
         [HttpPost]
@@ -26,7 +30,14 @@ namespace UniSwap.WebApi.Controllers
                 request.Category,
                 request.Condition);
 
-            return Ok(new { Id = id });
+            return Ok(new CreatedResponse(id));
+        }
+
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<ListingDto>> Get(Guid id)
+        {
+            var listing = await _getListing.ExecuteAsync(id);
+            return listing is null ? NotFound() : Ok(listing);
         }
 
         [HttpPost("{id:guid}/publish")]
@@ -37,10 +48,4 @@ namespace UniSwap.WebApi.Controllers
         }
     }
 
-    public record CreateListingRequest(
-        Guid OwnerId,
-        string Title,
-        string Description,
-        string Category,
-        string Condition);
 }

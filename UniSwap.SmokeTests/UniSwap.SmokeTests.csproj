@@ -8,5 +8,6 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\UniSwap.Infrastructure\UniSwap.Infrastructure.csproj" />
+    <ProjectReference Include="..\UniSwap.WebApi\UniSwap.WebApi.csproj" />
   </ItemGroup>
 </Project>

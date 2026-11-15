@@ -8,6 +8,15 @@ using UniSwap.Domain.Entities;
 using UniSwap.Domain.Events;
 using UniSwap.Infrastructure.Events;
 using UniSwap.Infrastructure.Repositories;
+using FluentValidation;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using UniSwap.WebApi.Dtos;
+using UniSwap.WebApi.Validation;
+using UniSwap.Infrastructure.Caching;
 
 var services = new ServiceCollection();
 services.AddSingleton<InMemoryStore>();
@@ -15,6 +24,7 @@ services.AddScoped<InMemoryUnitOfWork>();
 services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>());
 services.AddScoped<IListingRepository, InMemoryListingRepository>();
 services.AddScoped<IExchangeRequestRepository, InMemoryExchangeRequestRepository>();
+services.AddSingleton<IListingCache, TestListingCache>();
 services.AddScoped<IDomainEventDispatcher, InMemoryDomainEventDispatcher>();
 services.AddScoped<IDomainEventPublisher, DomainEventPublisher>();
 services.AddSingleton<RecordingAuditWriter>();
@@ -25,6 +35,7 @@ services.AddScoped<IDomainEventHandler<ReservationConfirmed>, ReservationConfirm
 services.AddScoped<IDomainEventHandler<ExchangeRequestAccepted>, ExchangeRequestAcceptedAuditHandler>();
 services.AddScoped<CreateListing>();
 services.AddScoped<PublishListing>();
+services.AddScoped<GetListing>();
 services.AddScoped<SendExchangeRequest>();
 services.AddScoped<AcceptExchangeRequest>();
 
@@ -34,11 +45,27 @@ var sp = scope.ServiceProvider;
 var exchangeOwner = Guid.NewGuid();
 var exchangeRequester = Guid.NewGuid();
 var listingId = await sp.GetRequiredService<CreateListing>().ExecuteAsync(exchangeOwner, "Book", "Description", "Books", "Used");
+var getListing = sp.GetRequiredService<GetListing>();
+if (await getListing.ExecuteAsync(listingId) is not null || await getListing.ExecuteAsync(Guid.NewGuid()) is not null)
+    throw new InvalidOperationException("Draft or missing listing was exposed.");
 var offeredListingId = await sp.GetRequiredService<CreateListing>().ExecuteAsync(exchangeRequester, "Other book", "Description", "Books", "Used");
 await sp.GetRequiredService<PublishListing>().ExecuteAsync(listingId);
+var listingDto = await getListing.ExecuteAsync(listingId);
+if (listingDto is null || listingDto.Id != listingId || listingDto.OwnerId != exchangeOwner ||
+    listingDto.Title != "Book" || listingDto.Description != "Description" || listingDto.Category != "Books" ||
+    listingDto.Condition != "Used" || listingDto.Status != "Published" || listingDto.PublishedAtUtc is null)
+    throw new InvalidOperationException("Listing DTO mapping failed.");
+var offlineReader = new GetListing(sp.GetRequiredService<IListingRepository>(), new MemcachedListingCache("127.0.0.1", 1));
+if ((await offlineReader.ExecuteAsync(listingId))?.Id != listingId)
+    throw new InvalidOperationException("Unavailable cache did not fall back to the repository.");
+var testCache = (TestListingCache)sp.GetRequiredService<IListingCache>();
+if (testCache.Values.Count != 1 || await getListing.ExecuteAsync(listingId) != listingDto)
+    throw new InvalidOperationException("Listing cache did not serve the cached DTO.");
 await sp.GetRequiredService<PublishListing>().ExecuteAsync(offeredListingId);
 var requestId = await sp.GetRequiredService<SendExchangeRequest>().ExecuteAsync(listingId, offeredListingId, exchangeRequester);
 await sp.GetRequiredService<AcceptExchangeRequest>().ExecuteAsync(requestId, exchangeOwner);
+if (testCache.Values.ContainsKey(listingId) || await getListing.ExecuteAsync(listingId) is not null)
+    throw new InvalidOperationException("Exchange did not invalidate the listing cache.");
 
 var listing = await sp.GetRequiredService<IListingRepository>().GetByIdAsync(listingId);
 var request = await sp.GetRequiredService<IExchangeRequestRepository>().GetByIdAsync(requestId);
@@ -131,6 +158,37 @@ if (target.Status != ListingStatus.Completed || offeredItem.Status != ListingSta
     throw new InvalidOperationException("Exchange completion did not update both listings.");
 Console.WriteLine("Listing, reservation, exchange, access and moderation domain rules passed.");
 
+var validationServices = new ServiceCollection();
+validationServices.AddScoped<IValidator<CreateListingRequest>, CreateListingRequestValidator>();
+validationServices.AddScoped<IValidator<SendExchangeRequestDto>, SendExchangeRequestValidator>();
+using var validationProvider = validationServices.BuildServiceProvider();
+var filter = new ValidationFilter(validationProvider);
+async Task<(ActionExecutingContext Context, bool Executed)> CheckFilter(object requestDto)
+{
+    var actionContext = new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor());
+    var context = new ActionExecutingContext(actionContext, [], new Dictionary<string, object?> { ["request"] = requestDto }, new object());
+    var executed = false;
+    await filter.OnActionExecutionAsync(context, () =>
+    {
+        executed = true;
+        return Task.FromResult(new ActionExecutedContext(actionContext, [], new object()));
+    });
+    return (context, executed);
+}
+var invalid = await CheckFilter(new CreateListingRequest(Guid.Empty, " x ", " ", "", ""));
+if (invalid.Executed || invalid.Context.Result is not BadRequestObjectResult { Value: ValidationProblemDetails problem } ||
+    !problem.Errors.ContainsKey("OwnerId") || !problem.Errors.ContainsKey("Title") || !problem.Errors.ContainsKey("Description"))
+    throw new InvalidOperationException("Validation filter did not return structured errors.");
+var valid = await CheckFilter(new CreateListingRequest(Guid.NewGuid(), "Book", "Description", "Books", "Used"));
+if (!valid.Executed || valid.Context.Result is not null)
+    throw new InvalidOperationException("Valid request did not pass the filter.");
+var sameId = Guid.NewGuid();
+var semantic = await CheckFilter(new SendExchangeRequestDto(sameId, sameId, Guid.NewGuid()));
+if (semantic.Executed || semantic.Context.Result is not BadRequestObjectResult { Value: ValidationProblemDetails semanticProblem } ||
+    !semanticProblem.Errors.ContainsKey("OfferedListingId"))
+    throw new InvalidOperationException("Semantic validation failed.");
+Console.WriteLine("Validation filter, structured errors and semantic rule passed.");
+
 static void Expect<TException>(Action action) where TException : Exception
 {
     try { action(); }
@@ -144,6 +202,23 @@ sealed class RecordingAuditWriter : IAuditWriter
     public Task WriteAsync(string message, CancellationToken cancellationToken = default)
     {
         Messages.Add(message);
+        return Task.CompletedTask;
+    }
+}
+
+sealed class TestListingCache : IListingCache
+{
+    public Dictionary<Guid, UniSwap.Application.Dtos.ListingDto> Values { get; } = [];
+    public Task<UniSwap.Application.Dtos.ListingDto?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Values.GetValueOrDefault(id));
+    public Task SetAsync(Guid id, UniSwap.Application.Dtos.ListingDto listing, CancellationToken cancellationToken = default)
+    {
+        Values[id] = listing;
+        return Task.CompletedTask;
+    }
+    public Task InvalidateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        Values.Remove(id);
         return Task.CompletedTask;
     }
 }

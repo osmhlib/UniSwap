@@ -3,7 +3,7 @@ using UniSwap.Application.Interfaces;
 namespace UniSwap.Application.UseCases.Exchanges;
 
 public sealed class AcceptExchangeRequest(IListingRepository listings, IExchangeRequestRepository requests,
-    IDomainEventPublisher events, IUnitOfWork unitOfWork)
+    IDomainEventPublisher events, IUnitOfWork unitOfWork, IListingCache cache)
 {
     public async Task ExecuteAsync(Guid exchangeRequestId, Guid actorId)
     {
@@ -15,6 +15,8 @@ public sealed class AcceptExchangeRequest(IListingRepository listings, IExchange
         await listings.UpdateAsync(listing);
         await listings.UpdateAsync(offered);
         await unitOfWork.SaveChangesAsync();
+        await cache.InvalidateAsync(listing.Id);
+        await cache.InvalidateAsync(offered.Id);
         await events.PublishAsync([request, listing, offered]);
     }
 }
