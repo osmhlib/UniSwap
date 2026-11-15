@@ -9,6 +9,7 @@ namespace UniSwap.Domain.Enums
         Pending,
         Accepted,
         Rejected,
-        Completed
+        Completed,
+        Cancelled
     }
 }

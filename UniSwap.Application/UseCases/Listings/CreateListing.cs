@@ -23,9 +23,11 @@ namespace UniSwap.Application.UseCases.Listings
         public async Task<Guid> ExecuteAsync(
             Guid ownerId,
             string title,
-            string description)
+            string description,
+            string category,
+            string condition)
         {
-            var listing = new Listing(ownerId, title, description);
+            var listing = new Listing(ownerId, title, description, category, condition);
 
             await _listingRepository.AddAsync(listing);
             await _unitOfWork.SaveChangesAsync();

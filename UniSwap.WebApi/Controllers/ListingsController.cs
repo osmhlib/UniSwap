@@ -22,7 +22,9 @@ namespace UniSwap.WebApi.Controllers
             var id = await _createListing.ExecuteAsync(
                 request.OwnerId,
                 request.Title,
-                request.Description);
+                request.Description,
+                request.Category,
+                request.Condition);
 
             return Ok(new { Id = id });
         }
@@ -38,5 +40,7 @@ namespace UniSwap.WebApi.Controllers
     public record CreateListingRequest(
         Guid OwnerId,
         string Title,
-        string Description);
+        string Description,
+        string Category,
+        string Condition);
 }

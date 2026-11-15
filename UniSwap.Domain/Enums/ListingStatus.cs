@@ -1,15 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace UniSwap.Domain.Enums;
 
-namespace UniSwap.Domain.Enums
+public enum ListingStatus
 {
-    public enum ListingStatus
-    {
-        Draft,
-        Available,
-        Reserved,
-        Exchanged,
-        Removed
-    }
+    Draft,
+    Published,
+    Reserved,
+    InExchange,
+    Completed,
+    Hidden,
+    Rejected
 }

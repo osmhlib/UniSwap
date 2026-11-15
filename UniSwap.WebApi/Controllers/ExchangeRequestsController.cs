@@ -24,20 +24,24 @@ namespace UniSwap.WebApi.Controllers
         {
             var id = await _sendExchangeRequest.ExecuteAsync(
                 request.ListingId,
+                request.OfferedListingId,
                 request.RequesterId);
 
             return Ok(new { Id = id });
         }
 
         [HttpPost("{id:guid}/accept")]
-        public async Task<IActionResult> Accept(Guid id)
+        public async Task<IActionResult> Accept(Guid id, AcceptExchangeRequestDto request)
         {
-            await _acceptExchangeRequest.ExecuteAsync(id);
+            await _acceptExchangeRequest.ExecuteAsync(id, request.ActorId);
             return NoContent();
         }
     }
 
     public record SendExchangeRequestDto(
         Guid ListingId,
+        Guid OfferedListingId,
         Guid RequesterId);
+
+    public record AcceptExchangeRequestDto(Guid ActorId);
 }
