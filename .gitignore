@@ -380,3 +380,5 @@ pgpass.conf
 *.key
 *.dump
 *.backup
+
+uniswap-frontend/dist/
