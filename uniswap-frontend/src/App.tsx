@@ -52,7 +52,101 @@ function Catalog({profile,notify}:{profile:Profile|null;notify:(s:string)=>void}
       {loading?<div className="loading">Завантажуємо оголошення…</div>:error?<div className="error-panel"><b>Не вдалося завантажити каталог</b><p>{error}</p><small>Переконайся, що API запущений і доступний за адресою, вказаною у .env.</small></div>:!data?.items.length?<div className="empty-state"><div className="empty-emoji">🌱</div><h3>Поки тут тихо</h3><p>Не знайшли речей за цим запитом. Спробуй змінити фільтри або додай перше оголошення.</p>{profile&&<Link to="/create" className="button button-primary">Додати річ</Link>}</div>:<><div className="listing-grid">{data.items.map((item,i)=><ListingCard key={item.id} item={item} index={i}/>)}</div><div className="pagination-note">Показано {data.items.length} із {data.totalCount} оголошень</div></>}
     </section></>;
 }
-function ListingCard({item,index}:{item:Listing;index:number}) { const [image,setImage]=useState<string|null>(null); useEffect(()=>{let url='';api.images(item.id).then(async imgs=>{if(imgs[0]){const response=await fetch(api.imageUrl(item.id,imgs[0].id));if(response.ok){const blob=await response.blob();url=URL.createObjectURL(blob);setImage(url);}}}).catch(()=>{});return()=>{if(url)URL.revokeObjectURL(url)};},[item.id]);const emoji=['📦','🎧','📚','🪴','👟','🧸'][index%6];return <Link to={`/listing/${item.id}`} className="listing-card"><div className="listing-image">{image?<img src={image}/>:<span>{emoji}</span>}<span className="listing-status">{item.status==='Published'?'Доступно':item.status==='Reserved'?'Зарезервовано':item.status==='InExchange'?'В обміні':item.status}</span><button className="favorite" onClick={e=>{e.preventDefault();e.stopPropagation();}} aria-label="До обраного"><Heart size={17}/></button></div><div className="listing-info"><span className="listing-category">{categoryLabel(item.category)}</span><h3>{item.title}</h3><p>{item.condition}</p><div className="listing-bottom"><span>Безкоштовно</span><span className="round-arrow"><ArrowUpRight size={17}/></span></div></div></Link>}
+
+function ListingCard({item,index}:{item:Listing;index:number}) {
+  const [image,setImage] = useState<string|null>(null);
+
+  useEffect(() => {
+    let objectUrl: string|null = null;
+    let cancelled = false;
+
+    const loadImage = async () => {
+      try {
+        const imgs = await api.images(item.id);
+
+        if (!imgs[0] || cancelled) return;
+
+        const token = getToken();
+
+        const response = await fetch(
+          api.imageUrl(item.id, imgs[0].id),
+          {
+            headers: token
+              ? { Authorization: `Bearer ${token}` }
+              : {}
+          }
+        );
+
+        if (!response.ok || cancelled) return;
+
+        const blob = await response.blob();
+
+        if (cancelled) return;
+
+        objectUrl = URL.createObjectURL(blob);
+        setImage(objectUrl);
+      } catch {
+        // Залишаємо емодзі, якщо фото не завантажилося
+      }
+    };
+
+    setImage(null);
+    loadImage();
+
+    return () => {
+      cancelled = true;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [item.id]);
+
+  const emoji = ['📦','🎧','📚','🪴','👟','🧸'][index%6];
+
+  return (
+    <Link to={`/listing/${item.id}`} className="listing-card">
+      <div className="listing-image">
+        {image
+          ? <img src={image} alt={item.title}/>
+          : <span>{emoji}</span>
+        }
+
+        <span className="listing-status">
+          {item.status==='Published'?'Доступно':
+           item.status==='Reserved'?'Зарезервовано':
+           item.status==='InExchange'?'В обміні':item.status}
+        </span>
+
+        <button
+          className="favorite"
+          onClick={e=>{
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          aria-label="До обраного"
+        >
+          <Heart size={17}/>
+        </button>
+      </div>
+
+      <div className="listing-info">
+        <span className="listing-category">
+          {categoryLabel(item.category)}
+        </span>
+        <h3>{item.title}</h3>
+        <p>{item.condition}</p>
+
+        <div className="listing-bottom">
+          <span>Безкоштовно</span>
+          <span className="round-arrow">
+            <ArrowUpRight size={17}/>
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 function Auth({onAuth}:{onAuth:(p:Profile)=>void}) { const [mode,setMode]=useState<'login'|'register'>(new URLSearchParams(location.search).get('mode')==='register'?'register':'login');const [name,setName]=useState('');const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{if(mode==='register'){await api.register({name,email,password});}const session=await api.login({email,password});setToken(session.accessToken);const p=await api.profile();onAuth(p);}catch(err){setError((err as Error).message)}finally{setBusy(false)}};return <div className="auth-layout"><div className="auth-aside"><div className="eyebrow">ТВОЯ СПІЛЬНОТА ОБМІНУ</div><h1>Речі об'єднують<br/><em>людей.</em></h1><p>Створи акаунт, щоб ділитися речами, знаходити цікаве та домовлятися про обмін.</p><div className="auth-illustration">♻️ <span>give · share · repeat</span></div></div><div className="auth-card"><div className="auth-tabs"><button className={mode==='login'?'selected':''} onClick={()=>setMode('login')}>Увійти</button><button className={mode==='register'?'selected':''} onClick={()=>setMode('register')}>Реєстрація</button></div><h2>{mode==='login'?'З поверненням!':'Створи акаунт'}</h2><p className="muted">{mode==='login'?'Увійди, щоб продовжити обмін.':'Це займе лише хвилину.'}</p><form onSubmit={submit} className="form-stack">{mode==='register'&&<label>Твоє ім’я<input required maxLength={200} value={name} onChange={e=>setName(e.target.value)} placeholder="Як до тебе звертатися?"/></label>}<label>Електронна пошта<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label><label>Пароль<input required type="password" minLength={mode==='register'?12:1} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='register'?'Мінімум 12 символів':'Твій пароль'}/></label>{error&&<div className="form-error">{error}</div>}<button className="button button-primary button-full" disabled={busy}>{busy?'Зачекай…':mode==='login'?'Увійти в акаунт':'Зареєструватися'} <ArrowRight size={17}/></button></form><p className="auth-foot">Продовжуючи, ти погоджуєшся користуватися платформою відповідально.</p></div></div>}
 
