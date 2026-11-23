@@ -118,6 +118,7 @@ app.UseCors();
 app.UseAuthentication();
 
 app.UseAuthorization();
+app.UseMiddleware<UploadSizeLimitMiddleware>();
 
 app.MapControllers();
 

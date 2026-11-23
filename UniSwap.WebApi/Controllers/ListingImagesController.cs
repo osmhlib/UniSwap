@@ -29,12 +29,19 @@ public sealed class ListingImagesController(ListingImages images) : ControllerBa
 
     [HttpPost]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(ListingImages.MaxBytes + 64 * 1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit = ListingImages.MaxBytes + 64 * 1024)]
+    [LimitListingImageUpload]
+    [RequestFormLimits(MultipartBodyLengthLimit = UploadSizeLimitMiddleware.MaxRequestBytes)]
     [ProducesResponseType<ListingImageResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult<ListingImageResponse>> Upload(Guid id, IFormFile file, CancellationToken ct)
     {
-        if (file.Length is <= 0 or > ListingImages.MaxBytes || Request.Form.Files.Count != 1)
+        if (file.Length > ListingImages.MaxBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new ProblemDetails
+            {
+                Status = StatusCodes.Status413PayloadTooLarge,
+                Title = "Payload Too Large",
+                Extensions = { ["code"] = "payload_too_large" }
+            });
+        if (file.Length <= 0 || Request.Form.Files.Count != 1)
             throw new InvalidImageUploadException();
         await using var input = file.OpenReadStream();
         var uploaded = await images.UploadAsync(id, User.UserId(), input, ct);

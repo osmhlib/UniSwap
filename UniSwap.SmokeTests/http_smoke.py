@@ -1,6 +1,7 @@
 """Run against a disposable UniSwap API in Development with migrations applied."""
 from concurrent.futures import ThreadPoolExecutor
 import json
+import http.client
 import os
 import secrets
 import struct
@@ -8,6 +9,7 @@ import time
 import zlib
 import urllib.error
 import urllib.request
+import urllib.parse
 
 base = os.environ["UniSwapTests__ApiUrl"].rstrip("/")
 
@@ -101,7 +103,30 @@ request("GET", image_list, 404)
 upload(png, 403, bob_token)
 assert upload(b"<svg/>", 400)["code"] == "invalid_image"
 upload(b"\x89PNG\r\n\x1a\n", 400)
-upload(png + b"\0" * (5 * 1024 * 1024), 400)
+exact_limit_image = upload(png + b"\0" * (5 * 1024 * 1024 - len(png)), 201)
+assert exact_limit_image["sizeBytes"] == 5 * 1024 * 1024
+request("DELETE", image_list + "/" + exact_limit_image["id"], 204, token=alice_token)
+assert upload(png + b"\0" * (5 * 1024 * 1024), 413)["code"] == "payload_too_large"
+
+# A request exceeding the multipart limit must return a readable 413 response,
+# both with Content-Length and with HTTP/1.1 chunked transfer encoding.
+oversized_body = (
+    b'--oversize\r\nContent-Disposition: form-data; name="file"; filename="image.png"\r\n'
+    b'Content-Type: image/png\r\n\r\n' + png + b'\0' * (5 * 1024 * 1024 + 100000)
+    + b'\r\n--oversize--\r\n'
+)
+assert request("POST", image_list, 413, oversized_body, alice_token,
+               content_type="multipart/form-data; boundary=oversize")["code"] == "payload_too_large"
+url = urllib.parse.urlsplit(base)
+connection_class = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
+connection = connection_class(url.hostname, url.port, timeout=15)
+connection.request("POST", image_list, (oversized_body[i:i + 32768] for i in range(0, len(oversized_body), 32768)),
+                   headers={"Authorization": "Bearer " + alice_token,
+                            "Content-Type": "multipart/form-data; boundary=oversize"}, encode_chunked=True)
+response = connection.getresponse()
+assert response.status == 413
+assert json.loads(response.read())["code"] == "payload_too_large"
+connection.close()
 uploaded = [upload(png, 201) for _ in range(4)]
 with ThreadPoolExecutor(max_workers=2) as workers:
     outcomes = list(workers.map(lambda _: upload(png, (201, 409)), range(2)))
