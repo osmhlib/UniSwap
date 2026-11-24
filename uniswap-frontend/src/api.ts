@@ -46,11 +46,26 @@ export const api = {
   listings: (params: URLSearchParams) => request<ListingPage>(`/api/listings?${params}`),
   listing: (id:string) => request<Listing>(`/api/listings/${id}`),
   mine: () => request<ListingPage>('/api/listings/mine?page=1&pageSize=100'),
+  mineById: (id: string) => request<Listing>(`/api/listings/mine/${id}`),
   createListing: (body: Pick<Listing,'title'|'description'|'category'|'condition'>) => request<{id:string}>('/api/listings', { method:'POST', body:json(body) }),
   updateListing: (id:string, body: Pick<Listing,'title'|'description'|'category'|'condition'>) => request<Listing>(`/api/listings/${id}`, { method:'PUT', body:json(body) }),
   publish: (id:string) => request<void>(`/api/listings/${id}/publish`, { method:'POST' }),
   deleteListing: (id:string) => request<void>(`/api/listings/${id}`, { method:'DELETE' }),
   images: (id:string) => request<ListingImage[]>(`/api/listings/${id}/images`),
+  imageBlob: async (id: string, imageId: string) => {
+  const headers = new Headers();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE}/api/listings/${id}/images/${imageId}`, { headers });
+
+  if (!response.ok) {
+    throw new Error(`Не вдалося завантажити фотографію (${response.status})`);
+  }
+
+  return URL.createObjectURL(await response.blob());
+},
+deleteImage: (id: string, imageId: string) =>
+  request<void>(`/api/listings/${id}/images/${imageId}`, { method: 'DELETE' }),
   imageUrl: (id:string, imageId:string) => `${API_BASE}/api/listings/${id}/images/${imageId}`,
   uploadImage: async (id:string, file:File) => { const form = new FormData(); form.append('file', file); return request<ListingImage>(`/api/listings/${id}/images`, {method:'POST', body:form}); },
   reserve: (listingId:string) => request('/api/reservations', {method:'POST', body:json({listingId})}),
