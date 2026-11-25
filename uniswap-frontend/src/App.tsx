@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, Check, ChevronDown, CircleUserRound, Heart, Leaf, LogOut, Menu, PackagePlus, Search, ShieldCheck, SlidersHorizontal, Sparkles, X } from 'lucide-react';
+import { BookOpen, Headphones, Package, Recycle, Sprout, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleUserRound, Heart, Leaf, LogOut, Menu, PackagePlus, Search, ShieldCheck, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { api, getToken, setToken } from './api';
 import type { Listing, ListingImage, ListingPage, Profile } from './api';
 
@@ -52,6 +52,21 @@ useEffect(() => {
   </div>;
 }
 
+
+function CatalogSelect({label,value,options,onChange,icon = false}:{label:string;value:string;options:{value:string;label:string}[];onChange:(value:string)=>void;icon?:boolean}) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (event:MouseEvent) => { if (!ref.current?.contains(event.target as Node)) ref.current?.removeAttribute('open'); };
+    document.addEventListener('click',close);
+    return () => document.removeEventListener('click',close);
+  },[]);
+  return <details className="catalog-select" ref={ref} onKeyDown={event => { if (event.key === 'Escape') { ref.current?.removeAttribute('open'); ref.current?.querySelector('summary')?.focus(); } }}>
+    <summary aria-label={label}>{icon && <SlidersHorizontal size={16}/>}<span>{options.find(option => option.value === value)?.label}</span><ChevronDown size={15}/></summary>
+    <div className="catalog-select-menu" role="group" aria-label={label}>
+      {options.map(option => <button key={option.value} type="button" className={option.value === value ? 'selected' : ''} onClick={() => { onChange(option.value); ref.current?.removeAttribute('open'); ref.current?.querySelector('summary')?.focus(); }}>{option.label}{option.value === value && <Check size={16} aria-hidden="true" />}</button>)}
+    </div>
+  </details>;
+}
 
 function Catalog({profile,notify}:{profile:Profile|null;notify:(s:string)=>void}) {
   const [params,setParams] = useSearchParams();
@@ -148,9 +163,9 @@ function Catalog({profile,notify}:{profile:Profile|null;notify:(s:string)=>void}
         <div className="hero-art">
           <div className="art-orbit orbit-one"/>
           <div className="art-orbit orbit-two"/>
-          <div className="art-card art-card-main"><span className="art-emoji">🎧</span><span className="art-tag">Шукає нового власника</span></div>
-          <div className="art-card art-card-small"><span className="art-emoji">📚</span><span>Улюблені історії — далі</span></div>
-          <div className="art-spark">✳</div>
+          <div className="art-card art-card-main"><Headphones size={72} aria-hidden="true" /><span className="art-tag">Шукає нового власника</span></div>
+          <div className="art-card art-card-small"><BookOpen size={48} aria-hidden="true" /><span>Улюблені історії — далі</span></div>
+          <div className="art-spark"><Sparkles aria-hidden="true" /></div>
           <div className="art-caption">give a little<br/>get a little</div>
         </div>
       </div>
@@ -170,15 +185,7 @@ function Catalog({profile,notify}:{profile:Profile|null;notify:(s:string)=>void}
           <p>Можливо, саме тут є те, що тобі потрібно.</p>
         </div>
 
-        <label className="availability-select">
-          <SlidersHorizontal size={16}/>
-          <select value={available} onChange={e => update('available',e.target.value)}>
-            <option value="true">Доступні речі</option>
-            <option value="false">Зарезервовані та в обміні</option>
-            <option value="all">Усі оголошення</option>
-          </select>
-          <ChevronDown size={14}/>
-        </label>
+        <CatalogSelect label="Наявність оголошень" value={available} onChange={value => update('available',value)} icon options={[{value:'true',label:'Доступні речі'},{value:'false',label:'Зарезервовані та в обміні'},{value:'all',label:'Усі оголошення'}]} />
       </div>
 
       <div className="catalog-toolbar">
@@ -187,13 +194,7 @@ function Catalog({profile,notify}:{profile:Profile|null;notify:(s:string)=>void}
           <input value={search} onChange={e => update('search',e.target.value)} placeholder="Знайти щось цікаве…"/>
         </div>
 
-        <label className="availability-select">
-          <select value={oldestFirst ? 'oldest' : 'newest'} onChange={e => update('oldestFirst',e.target.value === 'oldest' ? 'true' : 'false')}>
-            <option value="newest">Спочатку новіші</option>
-            <option value="oldest">Спочатку старіші</option>
-          </select>
-          <ChevronDown size={14}/>
-        </label>
+        <CatalogSelect label="Сортування оголошень" value={oldestFirst ? 'oldest' : 'newest'} onChange={value => update('oldestFirst',value === 'oldest' ? 'true' : 'false')} options={[{value:'newest',label:'Спочатку новіші'},{value:'oldest',label:'Спочатку старіші'}]} />
 
         <div className="category-pills">
           {categories.map(c => (
@@ -218,7 +219,7 @@ function Catalog({profile,notify}:{profile:Profile|null;notify:(s:string)=>void}
         </div>
       ) : !data?.items.length ? (
         <div className="empty-state">
-          <div className="empty-emoji">🌱</div>
+          <div className="empty-emoji"><Sprout size={48} aria-hidden="true" /></div>
           <h3>Поки тут тихо</h3>
           <p>Не знайшли речей за цим запитом. Спробуй змінити фільтри або додай перше оголошення.</p>
           {profile && <Link to="/create" className="button button-primary">Додати річ</Link>}
@@ -297,14 +298,14 @@ function ListingCard({item,index}:{item:Listing;index:number}) {
     };
   }, [item.id]);
 
-  const emoji = ['📦','🎧','📚','🪴','👟','🧸'][index%6];
+  const PlaceholderIcon = [Package, Headphones, BookOpen, Sprout, Package, Package][index%6];
 
   return (
     <Link to={`/listing/${item.id}`} className="listing-card">
       <div className="listing-image">
         {image
           ? <img src={image} alt={item.title}/>
-          : <span>{emoji}</span>
+          : <PlaceholderIcon size={48} aria-hidden="true" />
         }
 
         <span className="listing-status">
@@ -343,7 +344,7 @@ function ListingCard({item,index}:{item:Listing;index:number}) {
   );
 }
 
-function Auth({onAuth}:{onAuth:(p:Profile)=>void}) { const [mode,setMode]=useState<'login'|'register'>(new URLSearchParams(location.search).get('mode')==='register'?'register':'login');const [name,setName]=useState('');const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{if(mode==='register'){await api.register({name,email,password});}const session=await api.login({email,password});setToken(session.accessToken);const p=await api.profile();onAuth(p);}catch(err){setError((err as Error).message)}finally{setBusy(false)}};return <div className="auth-layout"><div className="auth-aside"><div className="eyebrow">ТВОЯ СПІЛЬНОТА ОБМІНУ</div><h1>Речі об'єднують<br/><em>людей.</em></h1><p>Створи акаунт, щоб ділитися речами, знаходити цікаве та домовлятися про обмін.</p><div className="auth-illustration">♻️ <span>give · share · repeat</span></div></div><div className="auth-card"><div className="auth-tabs"><button className={mode==='login'?'selected':''} onClick={()=>setMode('login')}>Увійти</button><button className={mode==='register'?'selected':''} onClick={()=>setMode('register')}>Реєстрація</button></div><h2>{mode==='login'?'З поверненням!':'Створи акаунт'}</h2><p className="muted">{mode==='login'?'Увійди, щоб продовжити обмін.':'Це займе лише хвилину.'}</p><form onSubmit={submit} className="form-stack">{mode==='register'&&<label>Твоє ім’я<input required maxLength={200} value={name} onChange={e=>setName(e.target.value)} placeholder="Як до тебе звертатися?"/></label>}<label>Електронна пошта<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label><label>Пароль<input required type="password" minLength={mode==='register'?12:1} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='register'?'Мінімум 12 символів':'Твій пароль'}/></label>{error&&<div className="form-error">{error}</div>}<button className="button button-primary button-full" disabled={busy}>{busy?'Зачекай…':mode==='login'?'Увійти в акаунт':'Зареєструватися'} <ArrowRight size={17}/></button></form><p className="auth-foot">Продовжуючи, ти погоджуєшся користуватися платформою відповідально.</p></div></div>}
+function Auth({onAuth}:{onAuth:(p:Profile)=>void}) { const [mode,setMode]=useState<'login'|'register'>(new URLSearchParams(location.search).get('mode')==='register'?'register':'login');const [name,setName]=useState('');const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{if(mode==='register'){await api.register({name,email,password});}const session=await api.login({email,password});setToken(session.accessToken);const p=await api.profile();onAuth(p);}catch(err){setError((err as Error).message)}finally{setBusy(false)}};return <div className="auth-layout"><div className="auth-aside"><div className="eyebrow">ТВОЯ СПІЛЬНОТА ОБМІНУ</div><h1>Речі об'єднують<br/><em>людей.</em></h1><p>Створи акаунт, щоб ділитися речами, знаходити цікаве та домовлятися про обмін.</p><div className="auth-illustration"><Recycle size={48} aria-hidden="true" /> <span>give · share · repeat</span></div></div><div className="auth-card"><div className="auth-tabs"><button className={mode==='login'?'selected':''} onClick={()=>setMode('login')}>Увійти</button><button className={mode==='register'?'selected':''} onClick={()=>setMode('register')}>Реєстрація</button></div><h2>{mode==='login'?'З поверненням!':'Створи акаунт'}</h2><p className="muted">{mode==='login'?'Увійди, щоб продовжити обмін.':'Це займе лише хвилину.'}</p><form onSubmit={submit} className="form-stack">{mode==='register'&&<label>Твоє ім’я<input required maxLength={200} value={name} onChange={e=>setName(e.target.value)} placeholder="Як до тебе звертатися?"/></label>}<label>Електронна пошта<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label><label>Пароль<input required type="password" minLength={mode==='register'?12:1} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='register'?'Мінімум 12 символів':'Твій пароль'}/></label>{error&&<div className="form-error">{error}</div>}<button className="button button-primary button-full" disabled={busy}>{busy?'Зачекай…':mode==='login'?'Увійти в акаунт':'Зареєструватися'} <ArrowRight size={17}/></button></form><p className="auth-foot">Продовжуючи, ти погоджуєшся користуватися платформою відповідально.</p></div></div>}
 function listingStatusLabel(status:string) {
   const labels:Record<string,string> = {
     Draft:'Чернетка',
@@ -461,7 +462,7 @@ function ListingDetails({profile,notify}:{profile:Profile|null;notify:(s:string)
           {imageUrls[0] ? (
             <img src={imageUrls[0]} alt={item.title}/>
           ) : (
-            <span>📦</span>
+            <Package size={48} aria-hidden="true" />
           )}
         </div>
 
@@ -1011,7 +1012,7 @@ function Account({profile,setProfile,notify}:{profile:Profile|null;setProfile:(p
 
           {!items.length ? (
             <div className="empty-state compact">
-              <div className="empty-emoji">📦</div>
+              <div className="empty-emoji"><Package size={48} aria-hidden="true" /></div>
               <h3>Тут поки немає оголошень</h3>
               <p>Додай першу річ, якою хочеш поділитися.</p>
             </div>
@@ -1021,7 +1022,7 @@ function Account({profile,setProfile,notify}:{profile:Profile|null;setProfile:(p
 
               return (
                 <div className="my-item" key={x.id}>
-                  <div className="my-item-icon">📦</div>
+                  <div className="my-item-icon"><Package size={24} aria-hidden="true" /></div>
 
                   <div className="my-item-info">
                     <b>{x.title}</b>
@@ -1032,18 +1033,18 @@ function Account({profile,setProfile,notify}:{profile:Profile|null;setProfile:(p
                     {listingStatusLabel(x.status)}
                   </span>
 
-                  <Link to={`/listing/${x.id}`} className="text-link">
+                  <Link to={`/listing/${x.id}`} className="text-link my-item-view">
                     Переглянути
                   </Link>
 
                   {editable && (
                     <>
-                      <Link to={`/edit/${x.id}`} className="text-link">
+                      <Link to={`/edit/${x.id}`} className="text-link my-item-edit">
                         Редагувати
                       </Link>
 
                       <button
-                        className="icon-button danger"
+                        className="icon-button danger my-item-delete"
                         onClick={() => void remove(x.id)}
                         title="Видалити оголошення"
                       >
@@ -1222,7 +1223,7 @@ function RequestCard({
   };
 
   return (
-    <div className="request-card">
+    <div className="request-card user-request-card">
       <b>{data.listing?.title || 'Оголошення недоступне'}</b>
 
       {type === 'exchange' && (
@@ -1300,6 +1301,16 @@ function ModerationListingCard({
   moderate: (id: string, action: 'hide'|'reject'|'return-to-draft'|'remove') => void;
 }) {
   const [photos, setPhotos] = useState<string[] | null>(null);
+  const [reasonError, setReasonError] = useState(false);
+
+  const runAction = (action: 'hide'|'reject'|'return-to-draft'|'remove') => {
+    if (action !== 'return-to-draft' && !reason.trim()) {
+      setReasonError(true);
+      return;
+    }
+    setReasonError(false);
+    moderate(item.id, action);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1342,7 +1353,7 @@ function ModerationListingCard({
   }, [item.id]);
 
   return (
-    <div className="request-card" key={item.id}>
+    <div className="request-card moderation-listing-card" key={item.id}>
       <b>{item.title}</b>
 
       <p>{item.category} · {item.condition}</p>
@@ -1381,15 +1392,15 @@ function ModerationListingCard({
         {status === 'Published' && (
           <>
             <button
-              disabled={!!busyId || !reason.trim()}
-              onClick={() => moderate(item.id,'hide')}
+              disabled={!!busyId}
+              onClick={() => runAction('hide')}
             >
               Приховати
             </button>
 
             <button
-              disabled={!!busyId || !reason.trim()}
-              onClick={() => moderate(item.id,'reject')}
+              disabled={!!busyId}
+              onClick={() => runAction('reject')}
             >
               Відхилити
             </button>
@@ -1399,7 +1410,7 @@ function ModerationListingCard({
         {(status === 'Hidden' || status === 'Rejected') && (
           <button
             disabled={!!busyId}
-            onClick={() => moderate(item.id,'return-to-draft')}
+            onClick={() => runAction('return-to-draft')}
           >
             Повернути в чернетки
           </button>
@@ -1407,12 +1418,14 @@ function ModerationListingCard({
 
         <button
           className="text-link"
-          disabled={!!busyId || !reason.trim()}
-          onClick={() => moderate(item.id,'remove')}
+          disabled={!!busyId}
+          onClick={() => runAction('remove')}
         >
           Видалити з причиною
         </button>
       </div>
+
+      {reasonError && !reason.trim() && <p className="moderation-reason-error" role="alert">Вкажіть причину модерації в полі над оголошеннями.</p>}
 
       {busyId === item.id && (
         <small className="muted">Обробляємо…</small>
@@ -1554,15 +1567,19 @@ function Moderation({profile,notify}:{profile:Profile|null;notify:(s:string)=>vo
       {loading ? (
         <div className="loading">Завантаження…</div>
       ) : tab === 'users' ? (
-        <div className="request-columns">
-          {users.map(user => (
-            <div className="request-card" key={user.id}>
-              <b>{user.name}</b>
-              <p>{user.email}</p>
-              <small>{user.role === 'Admin' ? 'Адміністратор' : 'Користувач'}</small>
+        <div className="moderation-users">
+          <div className="moderation-users-heading"><h2>Користувачі</h2><span>Показано: {users.length}</span></div>
+          {users.length ? (
+            <div className="moderation-users-list">
+              {users.map(user => (
+                <div className="moderation-user" key={user.id}>
+                  <div className="moderation-user-avatar" aria-hidden="true">{user.name?.trim().charAt(0).toUpperCase() || '?'}</div>
+                  <div className="moderation-user-details"><strong>{user.name}</strong><span>{user.email}</span></div>
+                  <span className={user.role === 'Admin' ? 'moderation-user-role admin' : 'moderation-user-role'}>{user.role === 'Admin' ? 'Адміністратор' : 'Користувач'}</span>
+                </div>
+              ))}
             </div>
-          ))}
-          {!users.length && <div className="empty-state">Користувачів поки немає.</div>}
+          ) : <div className="empty-state">Користувачів поки немає.</div>}
         </div>
       ) : (
         <div className="request-columns">
