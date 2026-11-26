@@ -1,13 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { BookOpen, Headphones, Package, Recycle, Sprout, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleUserRound, Heart, Leaf, LogOut, Menu, PackagePlus, Search, ShieldCheck, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { api, getToken, setToken } from './api';
 import type { Listing, ListingImage, ListingPage, Profile } from './api';
+import type { ExchangeListItem } from './api';
+import ExchangeOfferForm from './ExchangeOfferForm';
 
 const categories = ['Усі категорії','Електроніка','Одяг','Книги','Дім і побут','Спорт','Дитячі речі','Інше'];
 const categoryMap: Record<string,string> = { 'Електроніка':'Electronics', 'Одяг':'Clothing', 'Книги':'Books', 'Дім і побут':'Home', 'Спорт':'Sports', 'Дитячі речі':'Kids', 'Інше':'Other' };
 const categoryLabel = (v:string) => Object.entries(categoryMap).find(([,value])=>value.toLowerCase()===v.toLowerCase())?.[0] || v;
+const listingReturnPath = (value:string|null) => value && /^\/listing\/[a-z0-9-]+$/i.test(value) ? value : '/';
+function authLink(path:string,register = false) {
+  const params = new URLSearchParams();
+  if (register) params.set('mode','register');
+  if (listingReturnPath(path) !== '/') params.set('returnTo',path);
+  return `/auth${params.size ? `?${params}` : ''}`;
+}
 
 export default function App() {
   const [profile,setProfile] = useState<Profile|null>(null);
@@ -15,6 +24,9 @@ export default function App() {
   const [mobileOpen,setMobileOpen] = useState(false);
   const [toast,setToast] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
+  const authReturnTo = location.pathname === '/auth' ? new URLSearchParams(location.search).get('returnTo') || '/' : location.pathname;
+  useLayoutEffect(() => { window.scrollTo({top:0,left:0,behavior:'instant'}); },[location.pathname]);
 useEffect(() => {
   if (!getToken()) {
     setAuthReady(true);
@@ -34,14 +46,14 @@ useEffect(() => {
     <header className="topbar"><div className="nav-wrap">
       <Link to="/" className="brand"><span className="brand-mark"><Leaf size={20}/></span><span>uni<span className="brand-accent">swap</span></span></Link>
       <nav className={mobileOpen?'nav-links open':'nav-links'}><NavLink to="/" end onClick={()=>setMobileOpen(false)}>Каталог</NavLink>{profile&&<><NavLink to="/requests" onClick={()=>setMobileOpen(false)}>Мої запити</NavLink><NavLink to="/account" onClick={()=>setMobileOpen(false)}>Кабінет</NavLink></>}{profile?.role==='Admin'&&<NavLink to="/moderation">Модерація</NavLink>}</nav>
-      <div className="nav-actions">{profile?<><Link to="/create" className="button button-primary button-small"><PackagePlus size={16}/> Додати річ</Link><button className="avatar-button" title={profile.name} onClick={()=>navigate('/account')}>{profile.name.slice(0,1).toUpperCase()}</button><button className="icon-button logout" title="Вийти" onClick={signOut}><LogOut size={18}/></button></>:<><Link to="/auth" className="button button-ghost button-small">Увійти</Link><Link to="/auth?mode=register" className="button button-primary button-small">Приєднатися <ArrowUpRight size={15}/></Link></>}<button className="icon-button mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}>{mobileOpen?<X/>:<Menu/>}</button></div>
+      <div className="nav-actions">{profile?<><Link to="/create" className="button button-primary button-small"><PackagePlus size={16}/> Додати річ</Link><button className="avatar-button" title={profile.name} onClick={()=>navigate('/account')}>{profile.name.slice(0,1).toUpperCase()}</button><button className="icon-button logout" title="Вийти" onClick={signOut}><LogOut size={18}/></button></>:<><Link to={authLink(authReturnTo)} className="button button-ghost button-small">Увійти</Link><Link to={authLink(authReturnTo,true)} className="button button-primary button-small">Приєднатися <ArrowUpRight size={15}/></Link></>}<button className="icon-button mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}>{mobileOpen?<X/>:<Menu/>}</button></div>
     </div></header>
     <main>{!authReady?<div className="loading">Завантажуємо UniSwap…</div>:<Routes>
       <Route path="/" element={<Catalog profile={profile} notify={notify}/>}/>
-      <Route path="/auth" element={<Auth onAuth={p=>{setProfile(p);navigate('/');notify('Раді вітати в UniSwap!')}}/>}/>
+      <Route path="/auth" element={<Auth onAuth={p=>{setProfile(p);navigate(listingReturnPath(new URLSearchParams(location.search).get('returnTo')),{replace:true});notify('Раді вітати в UniSwap!')}}/>}/>
       <Route path="/listing/:id" element={<ListingDetails profile={profile} notify={notify}/>}/>
-      <Route path="/create" element={<ListingForm notify={notify}/>}/>
-      <Route path="/edit/:id" element={<ListingForm notify={notify}/>}/>
+      <Route path="/create" element={<ListingForm key={location.pathname} notify={notify}/>}/>
+      <Route path="/edit/:id" element={<ListingForm key={location.pathname} notify={notify}/>}/>
       <Route path="/account" element={<Account profile={profile} setProfile={setProfile} notify={notify}/>}/>
       <Route path="/requests" element={<Requests notify={notify}/>}/>
       <Route path="/moderation" element={<Moderation profile={profile} notify={notify}/>}/>
@@ -369,7 +381,10 @@ function ListingDetails({profile,notify}:{profile:Profile|null;notify:(s:string)
   const [imageUrls,setImageUrls] = useState<string[]>([]);
   const [error,setError] = useState('');
   const [busy,setBusy] = useState(false);
+  const [exchangeOpen,setExchangeOpen] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => { setExchangeOpen(false); },[id,profile?.id]);
 
   useEffect(() => {
     let active = true;
@@ -421,7 +436,7 @@ function ListingDetails({profile,notify}:{profile:Profile|null;notify:(s:string)
 
   const reserve = async () => {
     if (!profile) {
-      navigate('/auth');
+      navigate(authLink(`/listing/${id}`));
       return;
     }
 
@@ -515,14 +530,48 @@ function ListingDetails({profile,notify}:{profile:Profile|null;notify:(s:string)
             </p>
           )
         ) : (
-          <button
-            disabled={busy || item.status !== 'Published'}
-            onClick={reserve}
-            className="button button-primary button-full"
-          >
-            {busy ? 'Надсилаємо…' : 'Зарезервувати річ'}
-            <ArrowRight size={17}/>
-          </button>
+          <>
+            <div className="listing-actions">
+              <button
+                disabled={busy || exchangeOpen || item.status !== 'Published'}
+                onClick={reserve}
+                className="button button-primary button-full"
+              >
+                {busy ? 'Надсилаємо…' : 'Зарезервувати річ'}
+                <ArrowRight size={17}/>
+              </button>
+              <button
+                disabled={busy || exchangeOpen || item.status !== 'Published'}
+                onClick={() => {
+                  if (!profile) { navigate(authLink(`/listing/${id}`)); return; }
+                  setError('');
+                  setExchangeOpen(true);
+                }}
+                className="button button-ghost button-full"
+              >
+                Запропонувати обмін
+              </button>
+            </div>
+            {exchangeOpen && profile && item.status === 'Published' && (
+              <ExchangeOfferForm
+                key={id}
+                listingId={id}
+                userId={profile.id}
+                onClose={() => setExchangeOpen(false)}
+                onCreated={() => notify('Пропозицію обміну надіслано')}
+                onFailed={async message => {
+                  try {
+                    const updated = await api.listing(id);
+                    setItem(updated);
+                    if (updated.status !== 'Published') setError(message);
+                  } catch {
+                    setItem(null);
+                    setError(message);
+                  }
+                }}
+              />
+            )}
+          </>
         )}
 
         <p className="detail-hint">
@@ -707,7 +756,6 @@ function ListingForm({notify}:{notify:(s:string)=>void}) {
         setListingId(currentId);
         setStatus('Draft');
 
-        navigate(`/edit/${currentId}`,{replace:true});
       } else {
         await api.updateListing(currentId,form);
       }
@@ -725,6 +773,7 @@ function ListingForm({notify}:{notify:(s:string)=>void}) {
         navigate('/account');
       } else {
         notify(wasNew ? 'Чернетку збережено' : 'Зміни збережено');
+        if (!id) navigate(`/edit/${currentId}`,{replace:true});
       }
     } catch (e) {
       setError((e as Error).message);
@@ -739,7 +788,9 @@ function ListingForm({notify}:{notify:(s:string)=>void}) {
       <h1>{id ? 'Редагувати оголошення' : 'Додати нову річ'}</h1>
       <p className="muted">Опиши річ — і дозволь їй знайти нового власника.</p>
 
-      {loading && <p className="muted">Завантаження оголошення...</p>}
+      {loading ? <p className="muted" role="status">Завантаження оголошення...</p> : loadFailed ? (
+        <div className="form-error" role="alert">{error} <Link to="/account" className="text-link">Повернутися до кабінету</Link></div>
+      ) : <>
 
       {locked && (
         <div className="form-error">
@@ -908,6 +959,7 @@ function ListingForm({notify}:{notify:(s:string)=>void}) {
           )}
         </div>
       </form>
+      </>}
     </section>
   );
 }
@@ -1062,16 +1114,17 @@ function Account({profile,setProfile,notify}:{profile:Profile|null;setProfile:(p
   );
 }
 function Requests({notify}:{notify:(s:string)=>void}) {
-  const [tab,setTab] = useState<'received'|'sent'>('received');
+  const [params] = useSearchParams();
+  const [tab,setTab] = useState<'received'|'sent'>(params.get('tab') === 'sent' ? 'sent' : 'received');
   const [reservations,setReservations] = useState<any[]>([]);
-  const [exchanges,setExchanges] = useState<any[]>([]);
+  const [exchanges,setExchanges] = useState<ExchangeListItem[]>([]);
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(true);
   const [busyId,setBusyId] = useState('');
   const navigate = useNavigate();
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (background = false) => {
+    if (!background) setLoading(true);
     setError('');
 
     try {
@@ -1088,7 +1141,7 @@ function Requests({notify}:{notify:(s:string)=>void}) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
@@ -1105,6 +1158,7 @@ function Requests({notify}:{notify:(s:string)=>void}) {
     action:'accept'|'reject'|'cancel'|'complete',
     type:'reservation'|'exchange'
   ) => {
+    if (busyId) return;
     setBusyId(id);
     setError('');
 
@@ -1116,15 +1170,15 @@ function Requests({notify}:{notify:(s:string)=>void}) {
         await api.exchangeAction(id,action);
       }
 
-      await load();
+      await load(true);
       notify(
         action === 'complete'
           ? 'Обмін завершено'
           : 'Статус запиту оновлено'
       );
     } catch (e) {
+      await load(true);
       setError((e as Error).message);
-      await load();
     } finally {
       setBusyId('');
     }
@@ -1141,12 +1195,14 @@ function Requests({notify}:{notify:(s:string)=>void}) {
       <div className="request-tabs">
         <button
           className={tab === 'received' ? 'active' : ''}
+          disabled={!!busyId}
           onClick={() => setTab('received')}
         >
           Отримані
         </button>
         <button
           className={tab === 'sent' ? 'active' : ''}
+          disabled={!!busyId}
           onClick={() => setTab('sent')}
         >
           Надіслані
@@ -1168,6 +1224,7 @@ function Requests({notify}:{notify:(s:string)=>void}) {
                 type="reservation"
                 tab={tab}
                 busy={busyId === r.id}
+                blocked={!!busyId}
                 onAction={action => act(r.id,action,'reservation')}
               />
             )) : (
@@ -1177,13 +1234,14 @@ function Requests({notify}:{notify:(s:string)=>void}) {
 
           <div>
             <h2>Обмін</h2>
-            {exchanges.length ? exchanges.map((r:any) => (
+            {exchanges.length ? exchanges.map(r => (
               <RequestCard
                 key={r.id}
                 data={r}
                 type="exchange"
                 tab={tab}
                 busy={busyId === r.id}
+                blocked={!!busyId}
                 onAction={action => act(r.id,action,'exchange')}
               />
             )) : (
@@ -1201,12 +1259,14 @@ function RequestCard({
   type,
   tab,
   busy,
+  blocked,
   onAction
 }:{
   data:any;
   type:'reservation'|'exchange';
   tab:'received'|'sent';
   busy:boolean;
+  blocked:boolean;
   onAction:(action:'accept'|'reject'|'cancel'|'complete')=>void;
 }) {
   const pending = data.status === 'Pending';
@@ -1223,12 +1283,18 @@ function RequestCard({
   };
 
   return (
-    <div className="request-card user-request-card">
+    <div className="request-card user-request-card" aria-busy={busy}>
       <b>{data.listing?.title || 'Оголошення недоступне'}</b>
 
       {type === 'exchange' && (
         <p>
-          Твоя річ: {data.offeredListing?.title || 'Оголошення недоступне'}
+          {tab === 'received' ? 'Пропонують натомість' : 'Пропоную натомість'}: {data.offeredListing?.title || 'Оголошення недоступне'}
+        </p>
+      )}
+
+      {type === 'exchange' && data.listing && data.offeredListing && (
+        <p className="muted">
+          {tab === 'received' ? 'Твоя річ' : 'Бажана річ'}: {listingStatusLabel(data.listing.status)} · Запропонована річ: {listingStatusLabel(data.offeredListing.status)}
         </p>
       )}
 
@@ -1245,18 +1311,22 @@ function RequestCard({
         <p className="muted">Запропоноване оголошення недоступне.</p>
       )}
 
+      {type === 'exchange' && pending && tab === 'received' && !canAccept && (
+        <p className="muted">Прийняття недоступне: одна з речей більше не доступна для обміну.</p>
+      )}
+
       {pending && tab === 'received' && (
         <div className="request-actions">
           {canAccept && (
             <button
-              disabled={busy}
+              disabled={blocked}
               onClick={() => onAction('accept')}
             >
               Прийняти
             </button>
           )}
           <button
-            disabled={busy}
+            disabled={blocked}
             onClick={() => onAction('reject')}
           >
             Відхилити
@@ -1267,7 +1337,7 @@ function RequestCard({
       {pending && tab === 'sent' && (
         <button
           className="text-link"
-          disabled={busy}
+          disabled={blocked}
           onClick={() => onAction('cancel')}
         >
           Скасувати запит
@@ -1275,12 +1345,17 @@ function RequestCard({
       )}
 
       {type === 'exchange' && accepted && (
-        <button
-          disabled={busy}
-          onClick={() => onAction('complete')}
-        >
-          Завершити обмін
-        </button>
+        <>
+          <p className="muted">Завершуй обмін після фактичної передачі обох речей.</p>
+          <div className="request-actions">
+            <button
+              disabled={blocked}
+              onClick={() => onAction('complete')}
+            >
+              Завершити обмін
+            </button>
+          </div>
+        </>
       )}
 
       {busy && <small className="muted">Обробляємо запит…</small>}

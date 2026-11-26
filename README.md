@@ -7,7 +7,7 @@ UniSwap — вебзастосунок для обміну та безоплат
 - **Frontend:** React, TypeScript, Vite, React Router, Lucide.
 - **Backend:** ASP.NET Core Web API, Entity Framework Core, PostgreSQL, FluentValidation; Memcached — необов’язковий кеш.
 - `UniSwap.Domain` — доменна модель; `UniSwap.Application` — сценарії використання; `UniSwap.Infrastructure` — робота з даними, кешем і файлами; `UniSwap.WebApi` — HTTP API.
-- `uniswap-frontend` — клієнтський застосунок; `docs/frontend-integration.md` — подробиці інтеграції з API.
+- `uniswap-frontend` — клієнтський застосунок.
 
 ## Локальний запуск
 
@@ -44,7 +44,7 @@ UniSwap — вебзастосунок для обміну та безоплат
 
    Відкрийте адресу, показану Vite, зазвичай `http://localhost:5173`. Якщо адреса API інша, змініть `VITE_API_BASE_URL` у локальному `.env`; якщо адреса фронтенду інша — також змініть дозволений CORS origin і перезапустіть API.
 
-У Windows після первинного налаштування можна скористатися `start-api.cmd` і `start-frontend.cmd`. Для API перед запуском скрипта задайте `ConnectionStrings__UniSwap`; скрипт не застосовує міграції. Для фронтенду спочатку виконайте `npm ci`.
+У Windows після первинного налаштування можна скористатися `start-api.cmd` і `start-frontend.cmd`. Якщо `ConnectionStrings__UniSwap` не задано, скрипт API використовує `Host=127.0.0.1;Port=5432;Database=uniswap_test;Username=postgres`. Щоб використовувати іншу базу або пароль, задайте змінну в тому самому терміналі перед запуском скрипта. Скрипт не застосовує міграції. Для фронтенду спочатку виконайте `npm ci`.
 
 ## Адміністратор і сховище
 
@@ -56,7 +56,9 @@ Memcached необов’язковий: стандартна адреса — `
 
 ## API та збірка
 
-Основні групи маршрутів: `/api/auth`, `/api/users`, `/api/listings`, `/api/reservations`, `/api/exchanges`, `/api/moderation`. Захищені запити використовують `Authorization: Bearer <accessToken>`; токен пов’язаний із серверним сеансом. Опис операцій, помилок і роботи із зображеннями наведено в [гайді API](docs/frontend-integration.md).
+Основні групи маршрутів: `/api/auth`, `/api/users`, `/api/listings`, `/api/reservations`, `/api/exchanges`, `/api/moderation`. Захищені запити використовують `Authorization: Bearer <accessToken>`; токен пов’язаний із серверним сеансом. Доступні маршрути та формати запитів можна переглянути в OpenAPI за адресою, наведеною вище.
+
+Для пропозиції обміну обидва оголошення мають бути опубліковані: користувач обирає чужу річ і пропонує власну. Отримувач може прийняти або відхилити пропозицію, а ініціатор — скасувати її до прийняття. Після прийняття обидві речі переходять у стан обміну; завершити його може будь-який учасник.
 
 Перевірка збірки:
 

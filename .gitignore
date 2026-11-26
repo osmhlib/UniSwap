@@ -382,3 +382,10 @@ pgpass.conf
 *.backup
 
 uniswap-frontend/dist/
+uniswap-frontend/.demo-baseline.json
+uniswap-frontend/demo-videos/
+uniswap-frontend/record-demo.ts
+
+# Local presentation output
+.presentation-build/
+presentation-output/

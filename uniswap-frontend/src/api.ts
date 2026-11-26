@@ -8,6 +8,13 @@ export type Listing = {
 };
 export type ListingPage = { items: Listing[]; page: number; pageSize: number; totalCount: number };
 export type ListingImage = { id: string; contentType: string; sizeBytes: number };
+export type ExchangeListItem = {
+  id: string; listingId: string; offeredListingId: string; requesterId: string; recipientId: string;
+  status: string; createdAtUtc: string; updatedAtUtc: string; canAccept: boolean;
+  listing: { id: string; title: string; status: string } | null;
+  offeredListing: { id: string; title: string; status: string } | null;
+  counterparty: { id: string; name: string };
+};
 
 let token = localStorage.getItem('uniswap_token') || '';
 export function setToken(value: string) { token = value; if (value) localStorage.setItem('uniswap_token', value); else localStorage.removeItem('uniswap_token'); }
@@ -45,7 +52,7 @@ export const api = {
   updateProfile: (name:string) => request<Profile>('/api/users/me', { method:'PUT', body:json({name}) }),
   listings: (params: URLSearchParams) => request<ListingPage>(`/api/listings?${params}`),
   listing: (id:string) => request<Listing>(`/api/listings/${id}`),
-  mine: () => request<ListingPage>('/api/listings/mine?page=1&pageSize=100'),
+  mine: (page = 1) => request<ListingPage>(`/api/listings/mine?page=${page}&pageSize=100`),
   mineById: (id: string) => request<Listing>(`/api/listings/mine/${id}`),
   createListing: (body: Pick<Listing,'title'|'description'|'category'|'condition'>) => request<{id:string}>('/api/listings', { method:'POST', body:json(body) }),
   updateListing: (id:string, body: Pick<Listing,'title'|'description'|'category'|'condition'>) => request<Listing>(`/api/listings/${id}`, { method:'PUT', body:json(body) }),
@@ -72,8 +79,8 @@ deleteImage: (id: string, imageId: string) =>
   sentReservations: () => request<any[]>('/api/reservations/sent?page=1&pageSize=100'),
   receivedReservations: () => request<any[]>('/api/reservations/received?page=1&pageSize=100'),
   reservationAction: (id:string, action:'accept'|'reject'|'cancel') => request(`/api/reservations/${id}/${action}`, {method:'POST'}),
-  sentExchanges: () => request<any[]>('/api/exchanges/sent?page=1&pageSize=100'),
-  receivedExchanges: () => request<any[]>('/api/exchanges/received?page=1&pageSize=100'),
-  createExchange: (listingId:string, offeredListingId:string) => request('/api/exchanges', {method:'POST', body:json({listingId,offeredListingId})}),
+  sentExchanges: () => request<ExchangeListItem[]>('/api/exchanges/sent?page=1&pageSize=100'),
+  receivedExchanges: () => request<ExchangeListItem[]>('/api/exchanges/received?page=1&pageSize=100'),
+  createExchange: (listingId:string, offeredListingId:string) => request<{id:string}>('/api/exchanges', {method:'POST', body:json({listingId,offeredListingId})}),
   exchangeAction: (id:string, action:'accept'|'reject'|'cancel'|'complete') => request(`/api/exchanges/${id}/${action}`, {method:'POST'}),
 };

@@ -18,7 +18,11 @@
     "vite": "latest"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0"
+    "@types/react-dom": "^19.3.0",
+    "pg": "^8.23.1",
+    "playwright": "^1.65.1",
+    "tsx": "^4.23.15"
   }
 }
